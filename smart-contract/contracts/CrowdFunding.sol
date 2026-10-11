@@ -1,11 +1,13 @@
-// SPDX-License-Identifier: MIT
 
+ // SPDX-License-Identifier: MIT
 pragma solidity 0.8.19;
 
-
+/// @title CrowdFunding
+/// @notice Minimal on-chain crowdfunding with owner-controlled withdrawals.
 contract CrowdFunding {
     uint256 public totalCollected;
     uint256 public campaignCount;
+
     mapping(uint256 => Campaign) public campaigns;
 
     struct Donation {
@@ -30,91 +32,200 @@ contract CrowdFunding {
         uint256 indexed campaignId,
         string title
     );
+
     event CampaignClosed(uint256 indexed campaignId);
+
     event DonateReceived(
         uint256 indexed campaignId,
         address indexed donator,
         uint256 amount
     );
+
     event Withdrawal(
         uint256 indexed campaignId,
         address indexed owner,
         uint256 amount
     );
 
-    modifier onlyOwner(uint256 _id) {
+    modifier campaignExists(uint256 campaignId) {
         require(
-            msg.sender == campaigns[_id].owner,
-            "You are not the owner of this campaign."
+            campaignId < campaignCount,
+            "Campaign does not exist."
+        );
+        _;
+    }
+
+    modifier onlyOwner(uint256 campaignId) {
+        require(
+            msg.sender == campaigns[campaignId].owner,
+            "Only the campaign owner can do this."
         );
         _;
     }
 
     function createCampaign(
-        string memory _title,
-        string memory _description,
-        string memory _imageUrl,
-        uint256 _target,
-        uint256 _deadline
-    ) public returns (uint256) {
-        require(_deadline > block.timestamp, "Deadline must be in the future.");
-        require(_target > 0, "Target must be bigger than 0.");
+        string memory title,
+        string memory description,
+        string memory imageUrl,
+        uint256 target,
+        uint256 deadline
+    ) external returns (uint256) {
+        require(
+            bytes(title).length > 0 &&
+                bytes(title).length <= 100,
+            "Title must be 1-100 characters."
+        );
 
-        Campaign storage newCampaign = campaigns[campaignCount];
-        newCampaign.owner = msg.sender;
-        newCampaign.title = _title;
-        newCampaign.description = _description;
-        newCampaign.imageUrl = _imageUrl;
-        newCampaign.deadline = _deadline;
-        newCampaign.target = _target;
+        require(
+            bytes(description).length > 0 &&
+                bytes(description).length <= 5000,
+            "Description must be 1-5000 characters."
+        );
 
-        campaignCount++;
-        emit CampaignCreated(msg.sender, campaignCount - 1, _title);
+        require(
+            bytes(imageUrl).length > 0 &&
+                bytes(imageUrl).length <= 2048,
+            "Image URL is required."
+        );
 
-        return campaignCount - 1;
+        require(
+            target > 0,
+            "Target must be greater than zero."
+        );
+
+        require(
+            deadline > block.timestamp,
+            "Deadline must be in the future."
+        );
+
+        uint256 campaignId = campaignCount;
+
+        Campaign storage campaign = campaigns[campaignId];
+
+        campaign.owner = msg.sender;
+        campaign.title = title;
+        campaign.description = description;
+        campaign.imageUrl = imageUrl;
+        campaign.target = target;
+        campaign.deadline = deadline;
+
+        campaignCount = campaignId + 1;
+
+        emit CampaignCreated(msg.sender, campaignId, title);
+
+        return campaignId;
     }
 
-    function closeCampaign(uint256 _id) public onlyOwner(_id) {
-        Campaign storage campaign = campaigns[_id];
+    function closeCampaign(
+        uint256 campaignId
+    )
+        external
+        campaignExists(campaignId)
+        onlyOwner(campaignId)
+    {
+        Campaign storage campaign = campaigns[campaignId];
+
+        require(
+            campaign.deadline > block.timestamp,
+            "Campaign is already closed or expired."
+        );
+
         campaign.deadline = block.timestamp;
-        emit CampaignClosed(_id);
+
+        emit CampaignClosed(campaignId);
     }
 
-    function donate(uint256 _id) public payable {
-        Campaign storage campaign = campaigns[_id];
+    function donate(
+        uint256 campaignId
+    ) external payable campaignExists(campaignId) {
+        Campaign storage campaign = campaigns[campaignId];
 
-        campaign.donations.push(Donation(msg.sender, msg.value));
+        require(
+            campaign.deadline > block.timestamp,
+            "Campaign is closed or expired."
+        );
+
+        require(
+            msg.value > 0,
+            "Donation must be greater than zero."
+        );
+
+        campaign.donations.push(
+            Donation(msg.sender, msg.value)
+        );
+
         campaign.collectedAmount += msg.value;
         totalCollected += msg.value;
 
-        emit DonateReceived(_id, msg.sender, msg.value);
+        emit DonateReceived(
+            campaignId,
+            msg.sender,
+            msg.value
+        );
     }
 
-    function withdraw(uint256 _id, uint256 _amount) public onlyOwner(_id) {
-        Campaign storage campaign = campaigns[_id];
+    /// @notice The owner may withdraw only the unwithdrawn balance
+    /// attributed to this campaign.
+    function withdraw(
+        uint256 campaignId,
+        uint256 amount
+    )
+        external
+        campaignExists(campaignId)
+        onlyOwner(campaignId)
+    {
+        Campaign storage campaign = campaigns[campaignId];
+
+        uint256 available =
+            campaign.collectedAmount - campaign.withdrawedAmount;
 
         require(
-            _amount <= campaign.collectedAmount - campaign.withdrawedAmount,
-            "The amount withdrawn must be less than or equal to the withdrawnable amount."
+            amount > 0,
+            "Withdrawal must be greater than zero."
         );
 
-        campaign.withdrawedAmount += _amount;
-        payable(msg.sender).transfer(_amount);
+        require(
+            amount <= available,
+            "Withdrawal exceeds the available campaign balance."
+        );
 
-        emit Withdrawal(_id, msg.sender, _amount);
+        // Update state before making the external call.
+        campaign.withdrawedAmount += amount;
+
+        (bool sent, ) = payable(msg.sender).call{value: amount}("");
+
+        require(sent, "ETH transfer failed.");
+
+        emit Withdrawal(
+            campaignId,
+            msg.sender,
+            amount
+        );
     }
 
-    function getCampaigns() public view returns (Campaign[] memory) {
-        Campaign[] memory allCampaigns = new Campaign[](campaignCount);
+    function getCampaigns()
+        external
+        view
+        returns (Campaign[] memory)
+    {
+        Campaign[] memory allCampaigns =
+            new Campaign[](campaignCount);
 
-        for (uint i = 0; i < campaignCount; i++) {
+        for (uint256 i = 0; i < campaignCount; i++) {
             allCampaigns[i] = campaigns[i];
         }
 
         return allCampaigns;
     }
 
-    function getDonations(uint256 _id) public view returns (Donation[] memory) {
-        return campaigns[_id].donations;
+    function getDonations(
+        uint256 campaignId
+    )
+        external
+        view
+        campaignExists(campaignId)
+        returns (Donation[] memory)
+    {
+        return campaigns[campaignId].donations;
     }
 }
