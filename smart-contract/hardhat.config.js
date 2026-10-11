@@ -7,11 +7,14 @@ const config = {
   networks: {}
 };
 
-if (process.env.PROJECT_ID && process.env.ACCOUNT_PRIVATE_KEY) {
+const projectId = process.env.PROJECT_ID;
+const privateKey = process.env.ACCOUNT_PRIVATE_KEY;
+
+if (projectId && privateKey) {
   config.networks.sepolia = {
-    url: `https://eth-sepolia.g.alchemy.com/v2/${process.env.PROJECT_ID}`,
+    url: `https://eth-sepolia.g.alchemy.com/v2/${projectId}`,
     chainId: 11155111,
-    accounts: [`0x${process.env.ACCOUNT_PRIVATE_KEY.replace(/^0x/, "")}`]
+    accounts: [privateKey.startsWith("0x") ? privateKey : `0x${privateKey}`]
   };
 }
 
