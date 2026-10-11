@@ -7,9 +7,22 @@ import { Layout, Providers } from "@/components";
 const epilogue = Epilogue({ subsets: ["latin"] });
 
 export const metadata = {
-  title: "Fund Seed",
+  title: {
+    default: "FundSeed | Decentralized Crowdfunding",
+    template: "%s | FundSeed",
+  },
+  applicationName: "FundSeed",
   description:
-    "Fund Seed is your one-stop destination for bringing your boldest ideas to life. Our platform is designed to make crowdfunding seamless, engaging, and successful for creators and backers alike. Join the Fund Seed community and start sowing the seeds of innovation today.",
+    "FundSeed is a decentralized crowdfunding platform built on Ethereum. Create fundraising campaigns, support ideas, and manage contributions with a connected wallet.",
+  authors: [{ name: "Sanket Borade", url: "https://github.com/boradesanket13" }],
+  creator: "Sanket Borade",
+  openGraph: {
+    title: "FundSeed | Decentralized Crowdfunding",
+    description:
+      "Create crowdfunding campaigns and support ideas through a decentralized Ethereum-powered platform.",
+    siteName: "FundSeed",
+    type: "website",
+  },
 };
 
 export default function RootLayout({ children }) {

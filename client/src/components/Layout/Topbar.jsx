@@ -39,7 +39,6 @@ const Topbar = () => {
 
       <Searchbar />
 
-      {/* LARGE SCREEN */}
       <div className="md:block hidden">
         {signer ? (
           <div className="flex items-center gap-4">
@@ -65,7 +64,6 @@ const Topbar = () => {
         )}
       </div>
 
-      {/* SMALL SCREEN */}
       <div className="md:hidden flex justify-between sm:justify-end items-center relative w-full sm:w-auto sm:mb-0 mb-3">
         <Link href="/" className="sm:hidden p-2 rounded-lg">
           <Image src={Logo} alt="fundseed" priority width={40} height={40} />
